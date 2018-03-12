@@ -118,78 +118,97 @@ def drawDatetimeWidgets ():
 def drawVariableWidgets ():
     display (appendPVVBox)
 
-def drawPlot (variables = [], groups = None):
+def drawPlot (variables = [], groups = []):
 
-    if  variables == None or (type(variables) == list and len (variables) == 0):
+    if  variables == None or groups == None:
         return
 
+    # A single variable has been passed as parameter
     if type (variables) == dict:
         variables = [variables]
+
+    total = len (variables)
+
+    for group in groups:
+        total += len (group)
+
+    # No PVs were passed
+    if total == 0:
+        return
+
+    if len (variables) > 0:
+        groups.append (variables)
 
     r = epicsArchiver.EpicsArchiverRetrieval (ipAddress = getIP (), port = getPort (), \
                                               isSSLSecure = isSSL (), \
                                               isSelfSignedCertificate = isSelfSignedCert ())
 
-    answer = r.retrieveData (start = startTime (), end = endTime (), pvs = variables)
+    fig, axes = matplotlib.pyplot.subplots(len (groups), sharex = True, figsize = (12,8))
 
-    fig, ax = matplotlib.pyplot.subplots(1, sharex = True, figsize = (12,8))
+    for g, group in enumerate (groups):
 
-    init_ax = ax
+        answer = r.retrieveData (start = startTime (), end = endTime (), pvs = group)
 
-    units = {}
-    lines = []
-    labels = []
-
-    r = 0
-
-    for i, pv in enumerate(variables):
-
-        x_axis = []
-        y_axis = []
-
-        for sample in answer[pv ["name"]][0]["data"]:
-            # https://matplotlib.org/devdocs/api/_as_gen/matplotlib.pyplot.plot_date.html
-            # matplotlib.pyplot.plot_date(x, y)
-            # x and/or y can be a sequence of dates represented as float days since 0001-01-01 UTC.
-            x_axis.append((DELTA + sample["secs"] - UTC_OFFSET_TIMEDELTA * 3600 + sample["nanos"] * 1e-9) / (24.0 * 60.0 * 60.0 ))
-            y_axis.append(sample["val"])
-
-        if "EGU" in answer[pv ["name"]][0]["meta"].keys():
-            unit = answer[pv ["name"]][0]["meta"]["EGU"]
+        if len (groups) == 1:
+            ax = axes
         else:
-            unit = pv ["name"]
+            ax = axes [g]
 
-        if unit in units.keys ():
-            ax = units [unit]
+        init_ax = ax
 
-        else :
-            if i == 0:
-                units [unit] = ax
+        units = {}
+        lines = []
+        labels = []
+
+        padding = 0
+
+        for i, pv in enumerate(group):
+
+            x_axis = []
+            y_axis = []
+
+            for sample in answer[pv ["name"]][0]["data"]:
+                # https://matplotlib.org/devdocs/api/_as_gen/matplotlib.pyplot.plot_date.html
+                # matplotlib.pyplot.plot_date(x, y)
+                # x and/or y can be a sequence of dates represented as float days since 0001-01-01 UTC.
+                x_axis.append((DELTA + sample["secs"] - UTC_OFFSET_TIMEDELTA * 3600 + sample["nanos"] * 1e-9) / (24.0 * 60.0 * 60.0 ))
+                y_axis.append(sample["val"])
+
+            if "EGU" in answer[pv ["name"]][0]["meta"].keys():
+                unit = answer[pv ["name"]][0]["meta"]["EGU"]
             else:
-                units [unit] = init_ax.twinx ()
+                unit = pv ["name"]
+
+            if unit in units.keys ():
                 ax = units [unit]
-                ax.spines['right'].set_position(('axes', 1 + r))
 
-                r += 0.125
+            else :
+                if i == 0:
+                    units [unit] = ax
+                else:
+                    units [unit] = init_ax.twinx ()
+                    ax = units [unit]
+                    ax.spines['right'].set_position(('axes', 1 + padding))
 
-            ax.set_ylabel (unit)
+                    padding += 0.125
 
-        lines += ax.plot_date (x_axis, y_axis, linestyle = "solid", drawstyle = "steps-post", marker = "", label = pv ["name"], color = COLOR_STACK [i])
-        labels.append (pv ["name"])
+                ax.set_ylabel (unit)
 
-    for i, ax in enumerate (units.values ()):
+            lines += ax.plot_date (x_axis, y_axis, linestyle = "solid", drawstyle = "steps-post", marker = "", label = pv ["name"], color = COLOR_STACK [i])
+            labels.append (pv ["name"])
 
-        ax.grid ()
+        for i, ax in enumerate (units.values ()):
 
-        ax.set_yticks(numpy.linspace(ax.get_ybound()[0], ax.get_ybound()[1], 7))
+            ax.grid ()
 
-        ax.xaxis_date ()
-        ax.xaxis.set_major_locator(matplotlib.dates.MinuteLocator())
-        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%H:%M:%S"))
+            ax.set_yticks(numpy.linspace(ax.get_ybound()[0], ax.get_ybound()[1], 7))
 
-    fig.tight_layout()
+            ax.xaxis_date ()
+            ax.xaxis.set_major_locator(matplotlib.dates.MinuteLocator())
+            ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%H:%M:%S"))
 
-    matplotlib.pyplot.legend (lines, labels, loc = 0)
+        ax.legend (lines, labels)
+
     matplotlib.pyplot.show (block = False)
 
 def getIP ():
