@@ -68,12 +68,17 @@ class EpicsArchiverManagement:
     LOGIN_FAILED = 1
     UNAUTHENTICATED_USER = 2
 
+    DEFAULT_SAMPLING_PERIOD = 1.0
+    DEFAULT_SAMPLING_METHOD = "MONITOR"
+    DEFAULT_POLICY = "2HzPVs"
+
     def __init__ (self, ipAddress, port = 8080, requireUserAuthentication = True, isSelfSignedCertificate = True):
 
         self.ipAddress = ipAddress
         self.port = port
         self.requireUserAuthentication = requireUserAuthentication
         self.isSelfSignedCertificate = isSelfSignedCertificate
+        self.authenticatedUser = None
 
         if requireUserAuthentication:
             self.session = requests.Session ()
@@ -129,7 +134,8 @@ class EpicsArchiverManagement:
         for pv in pvs:
             print "Attempting to archive PV = " + pv ["name"] + " : "
             print self.session.get(mgmt + "/archivePV", \
-                                   params = {"pv" : pv ["name"], "samplingperiod" : pv ["sampling_period"], "samplingmethod" : pv ["sampling_method"], \
+                                   params = {"pv" : pv ["name"], "samplingperiod" : pv ["sampling_period"], \
+                                             "samplingmethod" : pv ["sampling_method"], \
                                              "policy" : pv ["sampling_policy"]}, \
                                    verify = not self.isSelfSignedCertificate).json()
 
@@ -140,9 +146,9 @@ class EpicsArchiverManagement:
 
         mgmt = self.getMgmtBpl()
 
-        for i in pvs:
-            a = self.session.get(mgmt + "/deletePV", params = {"pv" : i}, verify = not self.isSelfSignedCertificate)
-            print "PV " + i + " : status_code = " + str(a.status_code)
+        for pv in pvs:
+            a = self.session.get(mgmt + "/deletePV", params = {"pv" : pv ["name"]}, verify = not self.isSelfSignedCertificate)
+            print "PV " + pv ["name"] + " : status_code = " + str(a.status_code)
 
     def pausePVs (self, pvs = []) :
 
@@ -151,11 +157,11 @@ class EpicsArchiverManagement:
 
         mgmt = self.getMgmtBpl()
 
-        for i in pvs:
+        for pv in pvs:
 
-            a = self.session.get(mgmt + "/pauseArchivingPV", params = {"pv" : i}, verify = not self.isSelfSignedCertificate).json()
+            a = self.session.get(mgmt + "/pauseArchivingPV", params = {"pv" : pv ["name"]}, verify = not self.isSelfSignedCertificate).json()
 
             if 'validation' in a:
-                print "PV " + i + " : " + a['validation']
+                print "PV " + pv ["name"] + " : " + a['validation']
             elif 'engine_desc' in a:
-                print "PV " + i + " : " + a['engine_desc']
+                print "PV " + pv ["name"] + " : " + a['engine_desc']
